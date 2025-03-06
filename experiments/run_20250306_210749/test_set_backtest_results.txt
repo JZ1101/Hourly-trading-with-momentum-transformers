@@ -1,0 +1,27 @@
+============= TEST SET BACKTEST RESULTS =============
+Test period: 2024-02-23 13:00:00 to 2025-03-06 14:00:00
+Test period duration: 377.0 days
+Number of test data points: 9050
+
+============= TRANSFORMER MODEL =============
+Final Value: $12560.86
+Total Return: 25.61%
+Annual Return: 24.69%
+Sharpe Ratio: 0.70
+Max Drawdown: 26.58%
+Number of Trades: 449
+Win Rate: 43.25%
+
+============= BASELINE MODEL =============
+Final Value: $10583.06
+Total Return: 5.83%
+Annual Return: 5.64%
+Sharpe Ratio: 0.40
+Max Drawdown: 35.02%
+Number of Trades: 1052
+Win Rate: 43.25%
+
+============= BUY & HOLD =============
+Final Value: $17588.55
+Total Return: 75.89%
+Annual Return: 72.74%

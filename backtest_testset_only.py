@@ -11,7 +11,68 @@ from datetime import datetime
 # Import project modules
 from src.model import TransformerModel, BaselineModel
 from src.process_data import load_data, add_technical_indicators, create_sequences
-from src.backtest import Backtester, generate_signals_from_model
+from src.backtest import Backtester
+
+def generate_signals_from_model(
+    model, 
+    features, 
+    device='cpu',
+    threshold=0.0001  # small threshold to avoid all zeros
+):
+    """
+    Generate trading signals from a PyTorch model
+    
+    Args:
+        model: Trained PyTorch model
+        features: Input features [num_samples, seq_length, num_features]
+        device: Device to run the model on ('cpu' or 'cuda')
+        threshold: Small threshold for signal generation
+        
+    Returns:
+        Numpy array of trading signals
+    """
+    # Ensure model is on the specified device
+    model = model.to(device)
+    model.eval()
+    signals = []
+    
+    with torch.no_grad():
+        for i in range(len(features)):
+            try:
+                # Convert to tensor and add batch dimension
+                x = torch.tensor(features[i:i+1], dtype=torch.float32).to(device)
+                
+                # Get model prediction
+                output = model(x)
+                
+                # Convert to signal (-1, 0, or 1)
+                signal = output.cpu().numpy()[0][0]
+                
+                # Apply threshold to avoid small values being converted to 0
+                if abs(signal) < threshold:
+                    signal_value = 0
+                else:
+                    signal_value = np.sign(signal)  # Convert to -1, 0, or 1
+                
+                signals.append(signal_value)
+            except Exception as e:
+                print(f"Error at step {i}: {e}")
+                # In case of error, use neutral signal
+                signals.append(0.0)
+    
+    # Report signal distribution
+    signal_array = np.array(signals)
+    buy_count = np.sum(signal_array == 1)
+    sell_count = np.sum(signal_array == -1)
+    hold_count = np.sum(signal_array == 0)
+    total = len(signal_array)
+    
+    print("\nSignal Distribution:")
+    print(f"  Buy signals: {buy_count} ({buy_count/total*100:.2f}%)")
+    print(f"  Sell signals: {sell_count} ({sell_count/total*100:.2f}%)")
+    print(f"  Hold signals: {hold_count} ({hold_count/total*100:.2f}%)")
+    
+    return signal_array
 
 def load_experiment(experiment_dir):
     """Load model and parameters from experiment directory"""
@@ -19,15 +80,20 @@ def load_experiment(experiment_dir):
     with open(os.path.join(experiment_dir, 'params.txt'), 'r') as f:
         params = json.load(f)
     
-    # Load scaler if available
+    # Load scaler if available - with fix for PyTorch 2.6
     scaler_path = os.path.join(experiment_dir, 'scaler.pt')
     scaler = None
     if os.path.exists(scaler_path):
-        scaler = torch.load(scaler_path)
+        try:
+            # Try to load with weights_only=False (to allow loading non-tensor objects like StandardScaler)
+            scaler = torch.load(scaler_path, weights_only=False)
+        except Exception as e:
+            print(f"Warning: Could not load scaler: {e}")
+            print("Proceeding without feature scaling")
     
     return params, scaler
 
-def run_backtest_on_test_set(data_path, experiment_dir, commission=0.001, initial_capital=10000, compare_baseline=True):
+def run_backtest_on_test_set(data_path, experiment_dir, commission=0.001, initial_capital=10000, compare_baseline=True, threshold=0.0001, force_cpu=False):
     """Run backtest only on the test set portion of the data"""
     # Load experiment data
     params, scaler = load_experiment(experiment_dir)
@@ -88,6 +154,16 @@ def run_backtest_on_test_set(data_path, experiment_dir, commission=0.001, initia
         X_test_reshaped = scaler.transform(X_test_reshaped)
         X_test = X_test_reshaped.reshape(X_test.shape)
     
+    # Set device for model
+    if force_cpu:
+        device = 'cpu'
+    else:
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        
+    print(f"Using device: {device}")
+    if device == 'cuda':
+        print(f"CUDA device: {torch.cuda.get_device_name(0)}")
+    
     # Load model
     input_dim = X_test.shape[-1]
     hidden_dim = params.get('hidden_dim', 64)
@@ -104,24 +180,29 @@ def run_backtest_on_test_set(data_path, experiment_dir, commission=0.001, initia
         dropout=dropout
     )
     
+    # Load state dict with appropriate device mapping
     model_path = os.path.join(experiment_dir, 'model.pt')
-    model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
+    state_dict = torch.load(model_path, map_location=device)
+    model.load_state_dict(state_dict)
+    model = model.to(device)
     model.eval()
     
     # Also load baseline model for comparison if requested
     if compare_baseline:
         print("Creating baseline model for comparison")
         baseline_model = BaselineModel(window_size=20)
+        baseline_model = baseline_model.to(device)
     
     # Generate signals on TEST DATA ONLY
     print("Generating trading signals on test data only")
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    print(f"Using threshold value of {threshold} for signal generation")
     
-    # Generate signals for the test set
-    signals = generate_signals_from_model(model, X_test, device=device)
+    # Generate signals with threshold
+    signals = generate_signals_from_model(model, X_test, device=device, threshold=threshold)
     
     # Also generate baseline signals if requested
     if compare_baseline:
+        print("\nGenerating baseline model signals:")
         baseline_signals = generate_signals_from_model(baseline_model, X_test, device=device)
     
     # Create a subset of the price data that matches the test set
@@ -333,6 +414,10 @@ if __name__ == "__main__":
                         help='Initial capital for the backtest (default: 10000)')
     parser.add_argument('--no-baseline', action='store_true',
                         help='Disable baseline model comparison')
+    parser.add_argument('--threshold', type=float, default=0.0001,
+                        help='Threshold for signal generation (default: 0.0001)')
+    parser.add_argument('--force-cpu', action='store_true',
+                        help='Force CPU usage even if CUDA is available')
     
     args = parser.parse_args()
     
@@ -341,5 +426,7 @@ if __name__ == "__main__":
         experiment_dir=args.experiment,
         commission=args.commission,
         initial_capital=args.capital,
-        compare_baseline=not args.no_baseline
+        compare_baseline=not args.no_baseline,
+        threshold=args.threshold,
+        force_cpu=args.force_cpu
     )

@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 # Import project modules
 from src.model import TransformerModel, BaselineModel
@@ -27,9 +28,16 @@ def train_model(
     experiment_dir=None
 ):
     """
-    Train the model with early stopping
+    Train the model with early stopping and progress bar
     """
     model.to(device)
+    
+    # Monitor GPU usage if available
+    if device.type == 'cuda':
+        print(f"GPU: {torch.cuda.get_device_name(device)}")
+        print(f"Initial GPU memory allocated: {torch.cuda.memory_allocated(device) / 1024**2:.2f} MB")
+        print(f"Max GPU memory allocated: {torch.cuda.max_memory_allocated(device) / 1024**2:.2f} MB")
+        torch.cuda.reset_peak_memory_stats(device)  # Reset peak stats
     
     # Initialize tracking variables
     best_val_loss = float('inf')
@@ -37,12 +45,24 @@ def train_model(
     train_losses = []
     val_losses = []
     
-    for epoch in range(num_epochs):
+    # Calculate total training time estimate
+    total_batches = len(train_loader) + len(val_loader)
+    print(f"Training for {num_epochs} epochs with {len(train_loader)} training batches and {len(val_loader)} validation batches per epoch")
+    print(f"Total number of batches: {total_batches * num_epochs}")
+    start_time = time.time()
+    
+    # Main training loop with progress bar for epochs
+    for epoch in tqdm(range(num_epochs), desc="Epochs"):
+        epoch_start = time.time()
+        
         # Training phase
         model.train()
         train_loss = 0.0
         
-        for inputs, targets in train_loader:
+        # Progress bar for training batches
+        train_pbar = tqdm(train_loader, desc=f"Training (Epoch {epoch+1}/{num_epochs})", leave=False)
+        for inputs, targets in train_pbar:
+            # Explicitly check tensor device to confirm GPU usage
             inputs, targets = inputs.to(device), targets.to(device)
             
             # Zero the parameter gradients
@@ -56,7 +76,11 @@ def train_model(
             loss.backward()
             optimizer.step()
             
-            train_loss += loss.item() * inputs.size(0)
+            batch_loss = loss.item() * inputs.size(0)
+            train_loss += batch_loss
+            
+            # Update progress bar with current batch loss
+            train_pbar.set_postfix({"batch_loss": f"{batch_loss/inputs.size(0):.4f}"})
         
         train_loss = train_loss / len(train_loader.dataset)
         train_losses.append(train_loss)
@@ -65,8 +89,10 @@ def train_model(
         model.eval()
         val_loss = 0.0
         
+        # Progress bar for validation batches
+        val_pbar = tqdm(val_loader, desc=f"Validation (Epoch {epoch+1}/{num_epochs})", leave=False)
         with torch.no_grad():
-            for inputs, targets in val_loader:
+            for inputs, targets in val_pbar:
                 inputs, targets = inputs.to(device), targets.to(device)
                 outputs = model(inputs)
                 loss = criterion(outputs, targets)
@@ -75,8 +101,23 @@ def train_model(
         val_loss = val_loss / len(val_loader.dataset)
         val_losses.append(val_loss)
         
-        # Print progress
-        print(f'Epoch {epoch+1}/{num_epochs} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}')
+        # Calculate epoch time and estimate remaining time
+        epoch_time = time.time() - epoch_start
+        elapsed_time = time.time() - start_time
+        estimated_total_time = elapsed_time / (epoch + 1) * num_epochs
+        remaining_time = max(0, estimated_total_time - elapsed_time)
+        
+        # Report GPU stats every epoch if using GPU
+        if device.type == 'cuda':
+            print(f"GPU memory: current={torch.cuda.memory_allocated(device) / 1024**2:.2f} MB, "
+                  f"peak={torch.cuda.max_memory_allocated(device) / 1024**2:.2f} MB")
+        
+        # Print progress with time estimates
+        print(f'Epoch {epoch+1}/{num_epochs} | '
+              f'Train Loss: {train_loss:.4f} | '
+              f'Val Loss: {val_loss:.4f} | '
+              f'Epoch Time: {epoch_time:.1f}s | '
+              f'Remaining: {remaining_time/60:.1f}min')
         
         # Check if this is the best model so far
         if val_loss < best_val_loss:
@@ -85,6 +126,7 @@ def train_model(
             
             # Save the model
             if experiment_dir:
+                print(f"Saving improved model with validation loss: {val_loss:.4f}")
                 torch.save(model.state_dict(), os.path.join(experiment_dir, 'model.pt'))
                 
                 # Save training curve
@@ -102,9 +144,22 @@ def train_model(
                 print(f'Early stopping after {epoch+1} epochs')
                 break
     
+    total_time = time.time() - start_time
+    print(f"Training completed in {total_time/60:.2f} minutes")
+    
+    # Final GPU stats
+    if device.type == 'cuda':
+        print(f"Final GPU memory stats:")
+        print(f"Current memory allocated: {torch.cuda.memory_allocated(device) / 1024**2:.2f} MB")
+        print(f"Peak memory allocated: {torch.cuda.max_memory_allocated(device) / 1024**2:.2f} MB")
+    
     return train_losses, val_losses
 
 def main():
+    # gpu 
+    print(torch.cuda.is_available())
+    print(torch.cuda.device_count())
+    print(torch.cuda.get_device_name(0))
     # Configuration
     data_path = 'data/raw/btc_usdt_1h_2020Jan1_2025Mar6.csv'
     processed_path = 'data/processed/btc_usdt_1h_features.csv'
@@ -115,12 +170,12 @@ def main():
     os.makedirs(experiment_dir, exist_ok=True)
     
     # Model parameters
-    seq_length = 48  # 48 hours
-    hidden_dim = 64
-    num_heads = 4
-    num_layers = 2
-    dropout = 0.1
-    learning_rate = 0.001
+    seq_length = 72  # 3 days
+    hidden_dim = 128
+    num_heads = 8
+    num_layers = 4
+    dropout = 0.3
+    learning_rate = 0.0001
     batch_size = 32
     num_epochs = 100
     patience = 15
@@ -143,6 +198,14 @@ def main():
     # Device configuration
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f'Using device: {device}')
+    
+    # Check CUDA availability in more detail
+    if torch.cuda.is_available():
+        print(f"CUDA is available with {torch.cuda.device_count()} device(s)")
+        print(f"Current device: {torch.cuda.current_device()}")
+        print(f"Device name: {torch.cuda.get_device_name(0)}")
+    else:
+        print("CUDA is not available. Training will be on CPU.")
     
     # Load and process data if needed
     if not os.path.exists(processed_path):
@@ -204,6 +267,10 @@ def main():
     val_loader = DataLoader(val_dataset, batch_size=batch_size)
     test_loader = DataLoader(test_dataset, batch_size=batch_size)
     
+    # Sample batch to verify device placement
+    sample_batch, _ = next(iter(train_loader))
+    print(f"Sample batch shape: {sample_batch.shape}")
+    
     # Initialize model
     input_dim = X_train.shape[-1]
     model = TransformerModel(
@@ -213,6 +280,10 @@ def main():
         num_layers=num_layers,
         dropout=dropout
     )
+    
+    # Count model parameters
+    total_params = sum(p.numel() for p in model.parameters())
+    print(f"Model has {total_params:,} total parameters")
     
     # Initialize optimizer and loss function
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
