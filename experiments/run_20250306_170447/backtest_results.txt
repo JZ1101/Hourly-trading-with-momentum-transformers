@@ -1,0 +1,22 @@
+============= TRANSFORMER MODEL =============
+Final Value: $23240.94
+Total Return: 132.41%
+Annual Return: 17.73%
+Sharpe Ratio: 0.64
+Max Drawdown: 60.48%
+Number of Trades: 2091
+Win Rate: 43.05%
+
+============= BASELINE MODEL =============
+Final Value: $10583.06
+Total Return: 5.83%
+Annual Return: 1.10%
+Sharpe Ratio: 0.35
+Max Drawdown: 47.22%
+Number of Trades: 5677
+Win Rate: 43.05%
+
+============= BUY & HOLD =============
+Final Value: $120393.92
+Total Return: 1103.94%
+Annual Return: 61.85%
