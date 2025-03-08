@@ -1,0 +1,3 @@
+run_id,test_loss,best_val_loss,epochs_completed,training_time,model_size,run_dir,seq_length,patience,num_layers,num_heads,learning_rate,hidden_dim,dropout,batch_size
+0,3.321309935998746e-05,1.7692525032852964e-05,24,940.3113791942596,6323201,experiments/grid_search\grid_search_20250308_154305\run_000,144,10,8,4,0.0005,256,0.5,32
+1,3.321073218772056e-05,1.7716567709556737e-05,71,692.6039886474609,2782081,experiments/grid_search\grid_search_20250308_154305\run_001,34,20,4,24,5e-05,240,0.2,64

@@ -83,8 +83,37 @@ python train.py
 
 ### Backtesting
 ```
-python backtest.py --experiment experiments/run_yyyymmdd --data data/raw/btc_usdt_1h_2020Jan1_2025Mar6.csv --commission 0.001 --capital 10000
+python .\backtest_testset_only.py --experiment .\experiments\run_YYYYMMDD_HHMMSS
 ```
+
+### Training and backtesting pipeline
+```
+# Default random search with 30 iterations (basic parameter grid)
+python hyperparameter_search.py
+
+# Grid search with default parameter grid (exhaustive)
+python hyperparameter_search.py --grid-search
+
+# Random search with aggressive parameter grid
+python hyperparameter_search.py --aggressive
+
+# Random search with very aggressive parameter grid
+python hyperparameter_search.py --very-aggressive
+
+# Random search with research-level (largest) parameter grid
+python hyperparameter_search.py --research
+
+# Grid search with aggressive parameter grid (warning: many combinations)
+python hyperparameter_search.py --aggressive --grid-search
+
+# Backtest all trained models (recommended for thorough analysis)
+python hyperparameter_search.py --very-aggressive --backtest-all
+
+# Specify number of top models to backtest
+python hyperparameter_search.py --aggressive --top-models 10
+```
+
+
 
 Back testing Options:
 - `--experiment`: Path to the experiment directory (required)

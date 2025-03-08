@@ -1,0 +1,10 @@
+{
+    "seq_length": 34,
+    "patience": 20,
+    "num_layers": 4,
+    "num_heads": 24,
+    "learning_rate": 5e-05,
+    "hidden_dim": 240,
+    "dropout": 0.2,
+    "batch_size": 64
+}

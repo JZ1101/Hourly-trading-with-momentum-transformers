@@ -1,0 +1,4 @@
+run_id,test_loss,best_val_loss,epochs_completed,training_time,model_size,run_dir,seq_length,patience,num_layers,num_heads,learning_rate,hidden_dim,dropout,batch_size
+0,3.321614266676593e-05,1.7695733141531014e-05,63,2441.7771310806274,6323201,experiments/grid_search\grid_search_20250308_143142\run_000,144,10,8,4,0.0005,256,0.5,32
+2,3.325902181632834e-05,1.7790803560720657e-05,36,380.10146617889404,1192193,experiments/grid_search\grid_search_20250308_143142\run_002,55,25,6,16,0.0001,128,0.1,64
+3,3.325009066028486e-05,1.7689782055468903e-05,58,629.9331831932068,101249,experiments/grid_search\grid_search_20250308_143142\run_003,144,15,2,16,0.0001,64,0.4,32
