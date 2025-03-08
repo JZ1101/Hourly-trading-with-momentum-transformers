@@ -1,0 +1,5 @@
+{
+    "commission": 0.001,
+    "initial_capital": 10000,
+    "threshold": 0.0001
+}
