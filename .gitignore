@@ -5,3 +5,6 @@ __pycache__/
 *.png 
 .txt
 *.log
+*.pt
+*.csv
+*.txt

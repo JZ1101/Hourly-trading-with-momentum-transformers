@@ -312,7 +312,7 @@ def run_backtest_on_test_set(data_path, experiment_dir, commission=0.001, initia
     # Save plot to current directory too for easy access
     plt.savefig('latest_test_set_backtest_results.png')
     
-    plt.show()
+    #plt.show()
     
     # Print summary metrics
     print("\n============= TEST SET ONLY =============")
