@@ -49,6 +49,9 @@ class Backtester:
         position = 0  # Current position: -1 (short), 0 (none), 1 (long)
         capital = float(self.initial_capital)
         holdings = 0.0  # Number of units held
+        short_units = 0.0  # Initialize short_units to fix the undefined variable error
+        entry_price = 0.0  # Initialize entry_price to fix the undefined variable error
+        entry_idx = 0  # Initialize entry_idx to fix the undefined variable error
         trades = []    # List to track trades
         
         # Tracking metrics
@@ -77,19 +80,21 @@ class Backtester:
                         # Calculate profit/loss
                         if position == 1:  # Long position
                             # Calculate P&L
-                            entry_value = position_size 
+                            entry_value = holdings * entry_price  # Fixed: use entry_price for entry value calculation
                             exit_value = holdings * current_price
                             pnl = exit_value - entry_value
-                            capital += pnl - (entry_value + exit_value) * self.commission
+                            # Commission was already applied on entry, only apply on exit now
+                            capital += pnl - (exit_value) * self.commission
                             
                             # Record trade
                             profit_pct = ((current_price / entry_price) - 1) * 100
                         else:  # Short position
                             # Calculate P&L
-                            entry_value = position_size
+                            entry_value = short_units * entry_price  # Fixed: use entry_price and short_units
                             exit_value = short_units * current_price
                             pnl = entry_value - exit_value
-                            capital += pnl - (entry_value + exit_value) * self.commission
+                            # Commission was already applied on entry, only apply on exit now
+                            capital += pnl - (exit_value) * self.commission
                             
                             # Record trade
                             profit_pct = ((entry_price / current_price) - 1) * 100
@@ -118,9 +123,11 @@ class Backtester:
                         
                         # Calculate position size
                         if target_position == 1:  # Long position
+                            # Commission is applied when buying
                             holdings = effective_capital * (1 - self.commission) / current_price
                             short_units = 0.0
                         else:  # Short position
+                            # Commission is applied when selling short
                             short_units = effective_capital * (1 - self.commission) / current_price
                             holdings = 0.0
                     
@@ -133,13 +140,13 @@ class Backtester:
                 elif position == 1:  # Long
                     # Value of long position
                     market_value = holdings * current_price
-                    cost_basis = position_size
+                    cost_basis = holdings * entry_price  # Fixed: use entry_price and holdings for cost basis
                     unrealized_pnl = market_value - cost_basis
                     portfolio_value = capital + unrealized_pnl
                 else:  # Short
                     # Value of short position
                     market_value = short_units * current_price
-                    cost_basis = position_size
+                    cost_basis = short_units * entry_price  # Fixed: use entry_price and short_units for cost basis
                     unrealized_pnl = cost_basis - market_value
                     portfolio_value = capital + unrealized_pnl
                 

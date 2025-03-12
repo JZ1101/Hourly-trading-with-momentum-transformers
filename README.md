@@ -19,6 +19,11 @@ Trading-with-momentum-transformers/
 │   └── run_yyyymmdd/           # Simple naming
 │       ├── model.pt            # Weights
 │       └── params.txt          # LR, batch size
+|   └── search_test/            # Hyperparameter search results
+│       ├── run_yyyymmdd/       # Simple naming
+├── README.md                   # Project overview
+├── search_test.py              # Hyperparameter search, with pipeline of 1 train + 1 backtest for each pair
+├── backtest_testset_only.py    # Backtest model focusing on test set only
 └── requirements.txt            # Pinned versions
 ```
 
