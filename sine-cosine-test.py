@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 
 # Import project modules
 from src.model import TransformerModel, BaselineModel
-from src.process_data import load_data, add_technical_indicators, create_sequences
+from src.process_data import create_sequences
 from src.backtest import Backtester
 
 def generate_synthetic_data(wave_type='sine', n_periods=20, points_per_period=100, noise_level=0.1, start_date='2023-01-01'):
@@ -27,7 +27,6 @@ def generate_synthetic_data(wave_type='sine', n_periods=20, points_per_period=10
     Returns:
         DataFrame with synthetic price data
     """
-    # Calculate total number of points
     n_points = n_periods * points_per_period
     x = np.linspace(0, n_periods * 2 * np.pi, n_points)
     
@@ -41,7 +40,7 @@ def generate_synthetic_data(wave_type='sine', n_periods=20, points_per_period=10
     else:
         raise ValueError(f"Unsupported wave_type: {wave_type}")
     
-    # Add some noise if requested
+    # Add some noise
     if noise_level > 0:
         noise = np.random.normal(0, noise_level, n_points)
         y += noise
@@ -67,25 +66,46 @@ def generate_synthetic_data(wave_type='sine', n_periods=20, points_per_period=10
     
     return df
 
-def generate_signals_from_model(
-    model, 
-    features, 
-    device='cpu',
-    threshold=0.0001  # small threshold to avoid all zeros
-):
+def add_technical_indicators(df):
     """
-    Generate trading signals from a PyTorch model
+    Add technical indicators to the DataFrame
+    Simplified version of the function in process_data.py
+    """
+    df_features = df.copy()
     
-    Args:
-        model: Trained PyTorch model
-        features: Input features [num_samples, seq_length, num_features]
-        device: Device to run the model on ('cpu' or 'cuda')
-        threshold: Small threshold for signal generation
-        
-    Returns:
-        Numpy array of trading signals
+    # Price features
+    df_features['ma7'] = df['close'].rolling(window=7).mean()
+    df_features['ma14'] = df['close'].rolling(window=14).mean()
+    df_features['ma30'] = df['close'].rolling(window=30).mean()
+    
+    # RSI (14-period)
+    delta = df['close'].diff()
+    gain = delta.where(delta > 0, 0).rolling(window=14).mean()
+    loss = -delta.where(delta < 0, 0).rolling(window=14).mean()
+    rs = gain / loss
+    df_features['rsi'] = 100 - (100 / (1 + rs))
+    
+    # MACD
+    ema12 = df['close'].ewm(span=12).mean()
+    ema26 = df['close'].ewm(span=26).mean()
+    df_features['macd'] = ema12 - ema26
+    df_features['macd_signal'] = df_features['macd'].ewm(span=9).mean()
+    
+    # Volatility
+    df_features['volatility'] = df['returns'].rolling(window=14).std()
+    
+    # Momentum
+    df_features['momentum'] = df['close'] / df['close'].shift(4) - 1
+    
+    # Clean up NaN values
+    df_features = df_features.dropna()
+    
+    return df_features
+
+def generate_signals_from_model(model, features, device='cpu', threshold=0.0001):
     """
-    # Ensure model is on the specified device
+    Same as in backtest_testset_only.py
+    """
     model = model.to(device)
     model.eval()
     signals = []
@@ -93,28 +113,20 @@ def generate_signals_from_model(
     with torch.no_grad():
         for i in range(len(features)):
             try:
-                # Convert to tensor and add batch dimension
                 x = torch.tensor(features[i:i+1], dtype=torch.float32).to(device)
-                
-                # Get model prediction
                 output = model(x)
-                
-                # Convert to signal (-1, 0, or 1)
                 signal = output.cpu().numpy()[0][0]
                 
-                # Apply threshold to avoid small values being converted to 0
                 if abs(signal) < threshold:
                     signal_value = 0
                 else:
-                    signal_value = np.sign(signal)  # Convert to -1, 0, or 1
+                    signal_value = np.sign(signal)
                 
                 signals.append(signal_value)
             except Exception as e:
                 print(f"Error at step {i}: {e}")
-                # In case of error, use neutral signal
                 signals.append(0.0)
     
-    # Report signal distribution
     signal_array = np.array(signals)
     buy_count = np.sum(signal_array == 1)
     sell_count = np.sum(signal_array == -1)
@@ -134,12 +146,11 @@ def load_experiment(experiment_dir):
     with open(os.path.join(experiment_dir, 'params.txt'), 'r') as f:
         params = json.load(f)
     
-    # Load scaler if available - with fix for PyTorch 2.6
+    # Load scaler if available
     scaler_path = os.path.join(experiment_dir, 'scaler.pt')
     scaler = None
     if os.path.exists(scaler_path):
         try:
-            # Try to load with weights_only=False (to allow loading non-tensor objects like StandardScaler)
             scaler = torch.load(scaler_path, weights_only=False)
         except Exception as e:
             print(f"Warning: Could not load scaler: {e}")
@@ -147,26 +158,25 @@ def load_experiment(experiment_dir):
     
     return params, scaler
 
-def run_backtest_on_test_set(data_path=None, experiment_dir=None, commission=0.001, initial_capital=10000, 
-                             compare_baseline=True, threshold=0.0001, force_cpu=False, 
-                             use_synthetic=False, wave_type='sine', n_periods=20, 
-                             points_per_period=100, noise_level=0.1):
-    """Run backtest only on the test set portion of the data"""
+def run_test_on_sine_wave(experiment_dir, wave_type='sine', n_periods=20, 
+                          points_per_period=100, noise_level=0.1, 
+                          commission=0.001, initial_capital=10000, 
+                          compare_baseline=True, threshold=0.0001, force_cpu=False):
+    """
+    Test a trained model on synthetic sine/cosine wave data
+    """
     # Load experiment data
     params, scaler = load_experiment(experiment_dir)
     
-    # Load data - either from file or generate synthetic
-    if use_synthetic:
-        print(f"Generating synthetic {wave_type} wave data with {n_periods} periods and {noise_level} noise")
-        df = generate_synthetic_data(
-            wave_type=wave_type,
-            n_periods=n_periods,
-            points_per_period=points_per_period,
-            noise_level=noise_level
-        )
-    else:
-        print(f"Loading data from {data_path}")
-        df = load_data(data_path)
+    # Generate synthetic data
+    print(f"Generating synthetic {wave_type} wave data with {n_periods} periods")
+    print(f"Noise level: {noise_level}")
+    df = generate_synthetic_data(
+        wave_type=wave_type, 
+        n_periods=n_periods, 
+        points_per_period=points_per_period,
+        noise_level=noise_level
+    )
     
     # Add technical indicators
     print("Adding technical indicators")
@@ -180,8 +190,7 @@ def run_backtest_on_test_set(data_path=None, experiment_dir=None, commission=0.0
     
     print(f"Total data shape: X={X.shape}")
     
-    # Split the data - using the same split as in training
-    # This ensures we're using exactly the same test set
+    # Split the data - using 80/20 train/test split
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, shuffle=False
     )
@@ -195,25 +204,18 @@ def run_backtest_on_test_set(data_path=None, experiment_dir=None, commission=0.0
     # Add sequence length to get the actual index in the processed DataFrame
     df_test_start_idx = test_start_idx + seq_length
     
-    print(f"Using test data from index {test_start_idx} to {test_end_idx}")
-    print(f"This corresponds to DataFrame indices {df_test_start_idx} to {df_test_start_idx + len(X_test)}")
-    
     # Display date range of test set
     df_index_array = df_features.index.to_numpy()
-    if df_test_start_idx < len(df_index_array) and df_test_start_idx + len(X_test) <= len(df_index_array):
-        test_start_date = pd.Timestamp(df_index_array[df_test_start_idx])
-        test_end_date = pd.Timestamp(df_index_array[df_test_start_idx + len(X_test) - 1])
-        print(f"Test set date range: {test_start_date.strftime('%Y-%m-%d %H:%M:%S')} to {test_end_date.strftime('%Y-%m-%d %H:%M:%S')}")
-    else:
-        print("Warning: Test set indices exceed available data.")
-        return None, None
+    test_start_date = pd.Timestamp(df_index_array[df_test_start_idx])
+    test_end_date = pd.Timestamp(df_index_array[df_test_start_idx + len(X_test) - 1])
+    
+    print(f"Test set date range: {test_start_date.strftime('%Y-%m-%d %H:%M:%S')} to {test_end_date.strftime('%Y-%m-%d %H:%M:%S')}")
     
     # Calculate test period duration in days
-    # Convert to pandas timestamps to use pandas datetime functions
     test_duration_days = (test_end_date - test_start_date).days + (test_end_date - test_start_date).seconds / (60 * 60 * 24)
     print(f"Test period duration: {test_duration_days:.1f} days")
     
-    # Apply scaling to test data
+    # Apply scaling to test data if needed
     if scaler is not None:
         print("Applying feature scaling")
         X_test_reshaped = X_test.reshape(-1, X_test.shape[-1])
@@ -227,8 +229,6 @@ def run_backtest_on_test_set(data_path=None, experiment_dir=None, commission=0.0
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         
     print(f"Using device: {device}")
-    if device == 'cuda':
-        print(f"CUDA device: {torch.cuda.get_device_name(0)}")
     
     # Load model
     input_dim = X_test.shape[-1]
@@ -259,11 +259,8 @@ def run_backtest_on_test_set(data_path=None, experiment_dir=None, commission=0.0
         baseline_model = BaselineModel(window_size=20)
         baseline_model = baseline_model.to(device)
     
-    # Generate signals on TEST DATA ONLY
-    print("Generating trading signals on test data only")
-    print(f"Using threshold value of {threshold} for signal generation")
-    
-    # Generate signals with threshold
+    # Generate signals
+    print(f"Generating trading signals with threshold {threshold}")
     signals = generate_signals_from_model(model, X_test, device=device, threshold=threshold)
     
     # Also generate baseline signals if requested
@@ -275,9 +272,9 @@ def run_backtest_on_test_set(data_path=None, experiment_dir=None, commission=0.0
     test_df = df_features.iloc[df_test_start_idx:df_test_start_idx + len(X_test)].copy()
     
     # Run backtest
-    print(f"Running backtest with {commission:.2%} commission on test data only")
+    print(f"Running backtest with {commission:.2%} commission on test data")
     
-    # Create backtester (with test data only)
+    # Create backtester
     backtester = Backtester(
         price_data=test_df,
         commission=commission,
@@ -294,32 +291,19 @@ def run_backtest_on_test_set(data_path=None, experiment_dir=None, commission=0.0
     # Plot results
     plt.figure(figsize=(14, 10))
     
-    # If using synthetic data, add a plot of the raw price data at the top
-    if use_synthetic:
-        # Plot the original wave
-        ax0 = plt.subplot(4, 1, 1)
-        plt.plot(test_df.index, test_df['close'], label=f'{wave_type.capitalize()} Wave')
-        plt.title(f'Synthetic {wave_type.capitalize()} Wave Data')
-        plt.grid(True)
-        plt.legend()
-        
-        # Adjust the layout for the remaining plots
-        ax_portfolio = plt.subplot(4, 1, 2)
-        ax_positions = plt.subplot(4, 1, 3)
-        ax_returns = plt.subplot(4, 1, 4)
-    else:
-        # Use the original 3-panel layout
-        ax_portfolio = plt.subplot(3, 1, 1)
-        ax_positions = plt.subplot(3, 1, 2)
-        ax_returns = plt.subplot(3, 1, 3)
+    # Plot the original wave first
+    ax0 = plt.subplot(4, 1, 1)
+    plt.plot(test_df.index, test_df['close'], label=f'{wave_type.capitalize()} Wave')
+    plt.title(f'Synthetic {wave_type.capitalize()} Wave Data')
+    plt.grid(True)
+    plt.legend()
     
     # Plot portfolio value
-    plt.sca(ax_portfolio)
+    ax1 = plt.subplot(4, 1, 2)
     
     # Fix: Ensure transformer_values and test_df indices have the same length
     transformer_values = np.array(transformer_results['portfolio_values'])
     if len(transformer_values) != len(test_df):
-        # Adjust if needed - the portfolio values include the initial value
         transformer_values = transformer_values[1:]  # Skip the initial value
     
     # Use percentile for better scaling
@@ -336,12 +320,12 @@ def run_backtest_on_test_set(data_path=None, experiment_dir=None, commission=0.0
     
     plt.plot(test_df.index, [initial_capital] * len(test_df), 'k--', label='Initial Capital')
     plt.ylim(0, y_max * 1.1)  # Set y-axis limit for better visualization
-    plt.title(f'Portfolio Value Over Time (Test Set Only: {test_start_date.strftime("%Y-%m-%d")} to {test_end_date.strftime("%Y-%m-%d")})')
+    plt.title(f'Portfolio Value Over Time (Test Set)')
     plt.grid(True)
     plt.legend()
     
     # Plot positions
-    plt.sca(ax_positions)
+    ax2 = plt.subplot(4, 1, 3)
     positions = np.array(transformer_results['positions'])
     if len(positions) != len(test_df):
         positions = positions[1:]  # Skip the initial position
@@ -358,7 +342,7 @@ def run_backtest_on_test_set(data_path=None, experiment_dir=None, commission=0.0
     plt.legend()
     
     # Plot equity curve vs buy and hold
-    plt.sca(ax_returns)
+    ax3 = plt.subplot(4, 1, 4)
     
     # Calculate buy and hold returns (using only test data)
     prices = test_df['close'].values
@@ -393,30 +377,22 @@ def run_backtest_on_test_set(data_path=None, experiment_dir=None, commission=0.0
     
     plt.tight_layout()
     
-    # Save plot with appropriate filename
-    if use_synthetic:
-        output_filename = f"{wave_type}_wave_backtest_results.png"
-    else:
-        output_filename = "backtest_test_set_results.png"
+    # Save results
+    results_dir = f'sine_wave_test_{wave_type}'
+    os.makedirs(results_dir, exist_ok=True)
     
-    plt.savefig(os.path.join(experiment_dir, output_filename))
-    
-    # Save plot to current directory too for easy access
-    plt.savefig(f"latest_{output_filename}")
-    
-    #plt.show()
+    plt.savefig(os.path.join(results_dir, f'{wave_type}_wave_test_results.png'))
+    print(f"\nResults saved to {results_dir}")
     
     # Print summary metrics
-    data_type = f"SYNTHETIC {wave_type.upper()} WAVE" if use_synthetic else "TEST SET ONLY"
-    print(f"\n============= {data_type} =============")
-    print(f"Test period: {test_start_date.strftime('%Y-%m-%d %H:%M:%S')} to {test_end_date.strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"Number of test data points: {len(X_test)}")
-    print(f"Test period duration: {test_duration_days:.1f} days")
+    print("\n============= SINE WAVE TEST RESULTS =============")
+    print(f"Wave type: {wave_type}")
+    print(f"Noise level: {noise_level}")
+    print(f"Number of periods: {n_periods}")
     
     print("\n============= TRANSFORMER MODEL =============")
     print(f"Final Value: ${transformer_results['final_value']:.2f}")
     print(f"Total Return: {transformer_results['total_return']:.2f}%")
-    print(f"Annual Return: {transformer_results['annual_return']:.2f}%")
     print(f"Sharpe Ratio: {transformer_results['sharpe_ratio']:.2f}")
     print(f"Max Drawdown: {transformer_results['max_drawdown']:.2f}%")
     print(f"Number of Trades: {len(transformer_results['trades'])}")
@@ -430,7 +406,6 @@ def run_backtest_on_test_set(data_path=None, experiment_dir=None, commission=0.0
         print("\n============= BASELINE MODEL =============")
         print(f"Final Value: ${baseline_results['final_value']:.2f}")
         print(f"Total Return: {baseline_results['total_return']:.2f}%")
-        print(f"Annual Return: {baseline_results['annual_return']:.2f}%")
         print(f"Sharpe Ratio: {baseline_results['sharpe_ratio']:.2f}")
         print(f"Max Drawdown: {baseline_results['max_drawdown']:.2f}%")
         print(f"Number of Trades: {len(baseline_results['trades'])}")
@@ -442,38 +417,22 @@ def run_backtest_on_test_set(data_path=None, experiment_dir=None, commission=0.0
     
     # Calculate buy and hold metrics
     buy_hold_return = (buy_hold_values[-1] / buy_hold_values[0] - 1) * 100
-    # Safely calculate annual return based on test duration
-    if test_duration_days > 0:
-        buy_hold_annual_return = ((buy_hold_values[-1] / buy_hold_values[0]) ** (365 / test_duration_days) - 1) * 100
-    else:
-        buy_hold_annual_return = 0.0
     
     print("\n============= BUY & HOLD =============")
     print(f"Final Value: ${buy_hold_values[-1]:.2f}")
     print(f"Total Return: {buy_hold_return:.2f}%")
-    print(f"Annual Return: {buy_hold_annual_return:.2f}%")
     
     # Save results to file
-    if use_synthetic:
-        results_filename = f"{wave_type}_wave_backtest_results.txt"
-    else:
-        results_filename = "test_set_backtest_results.txt"
-    
-    results_path = os.path.join(experiment_dir, results_filename)
+    results_path = os.path.join(results_dir, f'{wave_type}_wave_test_results.txt')
     with open(results_path, 'w') as f:
-        f.write(f"============= {data_type} BACKTEST RESULTS =============\n")
-        if use_synthetic:
-            f.write(f"Wave type: {wave_type}\n")
-            f.write(f"Number of periods: {n_periods}\n")
-            f.write(f"Noise level: {noise_level}\n")
-        f.write(f"Test period: {test_start_date.strftime('%Y-%m-%d %H:%M:%S')} to {test_end_date.strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write(f"Test period duration: {test_duration_days:.1f} days\n")
-        f.write(f"Number of test data points: {len(X_test)}\n\n")
+        f.write("============= SINE WAVE TEST RESULTS =============\n")
+        f.write(f"Wave type: {wave_type}\n")
+        f.write(f"Noise level: {noise_level}\n")
+        f.write(f"Number of periods: {n_periods}\n\n")
         
         f.write("============= TRANSFORMER MODEL =============\n")
         f.write(f"Final Value: ${transformer_results['final_value']:.2f}\n")
         f.write(f"Total Return: {transformer_results['total_return']:.2f}%\n")
-        f.write(f"Annual Return: {transformer_results['annual_return']:.2f}%\n")
         f.write(f"Sharpe Ratio: {transformer_results['sharpe_ratio']:.2f}\n")
         f.write(f"Max Drawdown: {transformer_results['max_drawdown']:.2f}%\n")
         f.write(f"Number of Trades: {len(transformer_results['trades'])}\n")
@@ -485,7 +444,6 @@ def run_backtest_on_test_set(data_path=None, experiment_dir=None, commission=0.0
             f.write("============= BASELINE MODEL =============\n")
             f.write(f"Final Value: ${baseline_results['final_value']:.2f}\n")
             f.write(f"Total Return: {baseline_results['total_return']:.2f}%\n")
-            f.write(f"Annual Return: {baseline_results['annual_return']:.2f}%\n")
             f.write(f"Sharpe Ratio: {baseline_results['sharpe_ratio']:.2f}\n")
             f.write(f"Max Drawdown: {baseline_results['max_drawdown']:.2f}%\n")
             f.write(f"Number of Trades: {len(baseline_results['trades'])}\n")
@@ -498,18 +456,23 @@ def run_backtest_on_test_set(data_path=None, experiment_dir=None, commission=0.0
         f.write("============= BUY & HOLD =============\n")
         f.write(f"Final Value: ${buy_hold_values[-1]:.2f}\n")
         f.write(f"Total Return: {buy_hold_return:.2f}%\n")
-        f.write(f"Annual Return: {buy_hold_annual_return:.2f}%\n")
     
     print(f"\nResults saved to {results_path}")
     
     return transformer_results, baseline_results if compare_baseline else None
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Backtest a trained transformer model on test set only or synthetic data')
-    parser.add_argument('--data', type=str, default='data/raw/btc_usdt_1h_2020Jan1_2025Mar6.csv',
-                        help='Path to the data file (ignored if --synthetic is used)')
+    parser = argparse.ArgumentParser(description='Test a trained transformer model on synthetic sine/cosine wave data')
     parser.add_argument('--experiment', type=str, required=True,
                         help='Path to the experiment directory')
+    parser.add_argument('--wave-type', type=str, default='sine', choices=['sine', 'cosine', 'both'],
+                        help='Type of wave to generate (sine, cosine, or both)')
+    parser.add_argument('--periods', type=int, default=20,
+                        help='Number of complete wave cycles')
+    parser.add_argument('--points-per-period', type=int, default=100,
+                        help='Number of data points per wave cycle')
+    parser.add_argument('--noise', type=float, default=0.1,
+                        help='Amount of noise to add (standard deviation)')
     parser.add_argument('--commission', type=float, default=0.001,
                         help='Trading commission as a decimal (default: 0.001 = 0.1%)')
     parser.add_argument('--capital', type=float, default=10000,
@@ -521,31 +484,17 @@ if __name__ == "__main__":
     parser.add_argument('--force-cpu', action='store_true',
                         help='Force CPU usage even if CUDA is available')
     
-    # Add new arguments for synthetic data
-    parser.add_argument('--synthetic', action='store_true',
-                        help='Use synthetic data instead of loading from file')
-    parser.add_argument('--wave-type', type=str, default='sine', choices=['sine', 'cosine', 'both'],
-                        help='Type of synthetic wave to generate (sine, cosine, or both)')
-    parser.add_argument('--periods', type=int, default=20,
-                        help='Number of complete wave cycles for synthetic data')
-    parser.add_argument('--points-per-period', type=int, default=100,
-                        help='Number of data points per wave cycle for synthetic data')
-    parser.add_argument('--noise', type=float, default=0.1,
-                        help='Amount of noise to add to synthetic data (standard deviation)')
-    
     args = parser.parse_args()
     
-    run_backtest_on_test_set(
-        data_path=args.data,
+    run_test_on_sine_wave(
         experiment_dir=args.experiment,
+        wave_type=args.wave_type,
+        n_periods=args.periods,
+        points_per_period=args.points_per_period,
+        noise_level=args.noise,
         commission=args.commission,
         initial_capital=args.capital,
         compare_baseline=not args.no_baseline,
         threshold=args.threshold,
-        force_cpu=args.force_cpu,
-        use_synthetic=args.synthetic,
-        wave_type=args.wave_type,
-        n_periods=args.periods,
-        points_per_period=args.points_per_period,
-        noise_level=args.noise
+        force_cpu=args.force_cpu
     )

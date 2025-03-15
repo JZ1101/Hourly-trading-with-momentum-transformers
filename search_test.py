@@ -478,23 +478,23 @@ def grid_search_with_backtest(
                 f.write(f"Total models tested: {len(results)}\n")
                 f.write(f"Models backtested: {len(backtest_summary)}\n\n")
                 
-                f.write(f"Top 5 models by return:\n")
-                for i, row in backtest_df.sort_values('total_return', ascending=False).head(5).iterrows():
+                f.write(f"Top 10 models by return:\n")
+                for i, row in backtest_df.sort_values('total_return', ascending=False).head(10).iterrows():
                     f.write(f"Run {int(row['run_id'])}: Return: {row['total_return']:.2f}%, "
                         f"Sharpe: {row['sharpe_ratio']:.2f}, "
                         f"Drawdown: {row['max_drawdown']:.2f}%, "
                         f"Win Rate: {row['win_rate']:.2f}%\n")
                 
-                f.write(f"\nTop 5 models by Sharpe ratio:\n")
-                for i, row in backtest_df.sort_values('sharpe_ratio', ascending=False).head(5).iterrows():
+                f.write(f"\nTop 10 models by Sharpe ratio:\n")
+                for i, row in backtest_df.sort_values('sharpe_ratio', ascending=False).head(10).iterrows():
                     f.write(f"Run {int(row['run_id'])}: Sharpe: {row['sharpe_ratio']:.2f}, "
                         f"Return: {row['total_return']:.2f}%, "
                         f"Drawdown: {row['max_drawdown']:.2f}%, "
                         f"Win Rate: {row['win_rate']:.2f}%\n")
                 
-                f.write(f"\nTop 5 models by lowest drawdown (with positive returns):\n")
+                f.write(f"\nTop 10 models by lowest drawdown (with positive returns):\n")
                 positive_returns = backtest_df[backtest_df['total_return'] > 0]
-                for i, row in positive_returns.sort_values('max_drawdown', ascending=True).head(5).iterrows():
+                for i, row in positive_returns.sort_values('max_drawdown', ascending=True).head(10).iterrows():
                     f.write(f"Run {int(row['run_id'])}: Drawdown: {row['max_drawdown']:.2f}%, "
                         f"Return: {row['total_return']:.2f}%, "
                         f"Sharpe: {row['sharpe_ratio']:.2f}, "
@@ -502,8 +502,8 @@ def grid_search_with_backtest(
             
             # Print summary to console
             print("\nBacktest summary:")
-            print(f"Top 5 models by return:")
-            top_models = backtest_df.sort_values('total_return', ascending=False).head(5)
+            print(f"Top 10 models by return:")
+            top_models = backtest_df.sort_values('total_return', ascending=False).head(10)
             for i, row in top_models.iterrows():
                 print(f"Run {int(row['run_id'])}: Return: {row['total_return']:.2f}%, "
                     f"Sharpe: {row['sharpe_ratio']:.2f}, "
@@ -635,23 +635,23 @@ def grid_search_with_backtest(
                 f.write(f"Total models tested: {len(results)}\n")
                 f.write(f"Models backtested: {len(backtest_summary)}\n\n")
                 
-                f.write(f"Top 5 models by return:\n")
-                for i, row in backtest_df.sort_values('total_return', ascending=False).head(5).iterrows():
+                f.write(f"Top 10 models by return:\n")
+                for i, row in backtest_df.sort_values('total_return', ascending=False).head(10).iterrows():
                     f.write(f"Run {int(row['run_id'])}: Return: {row['total_return']:.2f}%, "
                         f"Sharpe: {row['sharpe_ratio']:.2f}, "
                         f"Drawdown: {row['max_drawdown']:.2f}%, "
                         f"Win Rate: {row['win_rate']:.2f}%\n")
                 
-                f.write(f"\nTop 5 models by Sharpe ratio:\n")
-                for i, row in backtest_df.sort_values('sharpe_ratio', ascending=False).head(5).iterrows():
+                f.write(f"\nTop 10 models by Sharpe ratio:\n")
+                for i, row in backtest_df.sort_values('sharpe_ratio', ascending=False).head(10).iterrows():
                     f.write(f"Run {int(row['run_id'])}: Sharpe: {row['sharpe_ratio']:.2f}, "
                         f"Return: {row['total_return']:.2f}%, "
                         f"Drawdown: {row['max_drawdown']:.2f}%, "
                         f"Win Rate: {row['win_rate']:.2f}%\n")
                 
-                f.write(f"\nTop 5 models by lowest drawdown (with positive returns):\n")
+                f.write(f"\nTop 10 models by lowest drawdown (with positive returns):\n")
                 positive_returns = backtest_df[backtest_df['total_return'] > 0]
-                for i, row in positive_returns.sort_values('max_drawdown', ascending=True).head(5).iterrows():
+                for i, row in positive_returns.sort_values('max_drawdown', ascending=True).head(10).iterrows():
                     f.write(f"Run {int(row['run_id'])}: Drawdown: {row['max_drawdown']:.2f}%, "
                         f"Return: {row['total_return']:.2f}%, "
                         f"Sharpe: {row['sharpe_ratio']:.2f}, "
@@ -659,8 +659,8 @@ def grid_search_with_backtest(
             
             # Print summary to console
             print("\nBacktest summary:")
-            print(f"Top 5 models by return:")
-            top_models = backtest_df.sort_values('total_return', ascending=False).head(5)
+            print(f"Top 10 models by return:")
+            top_models = backtest_df.sort_values('total_return', ascending=False).head(10)
             for i, row in top_models.iterrows():
                 print(f"Run {int(row['run_id'])}: Return: {row['total_return']:.2f}%, "
                     f"Sharpe: {row['sharpe_ratio']:.2f}, "
@@ -679,7 +679,7 @@ def main():
     parser = argparse.ArgumentParser(description='Run parameter search with integrated backtesting')
     parser.add_argument('--data', type=str, default='data/raw/btc_usdt_1h_2020Jan1_2025Mar6.csv',
                         help='Path to raw data file')
-    parser.add_argument('--output', type=str, default='experiments/search_test',
+    parser.add_argument('--output', type=str, default='experiments/detailed_search_test',
                         help='Base directory for experiment outputs')
     parser.add_argument('--max-epochs', type=int, default=100,
                         help='Maximum number of epochs per model')
@@ -752,10 +752,10 @@ def main():
     elif args.aggressive:
         # Aggressive parameter grid
         param_grid = {
-            'seq_length': [8, 13, 21, 34, 55, 89, 144],  # Fibonacci numbers
+            'seq_length': [5, 8, 13, 21, 34, 89], # Fibonacci numbers
             'hidden_dim': [64, 128, 256, 384],
-            'num_heads': [4, 8, 16],
-            'num_layers': [2, 4, 6],
+            'num_heads': [4, 8, 16, 32],
+            'num_layers': [ 4, 6, 8, 12],
             'dropout': [0.1, 0.3, 0.5],
             'learning_rate': [1e-4, 5e-4, 1e-3],
             'batch_size': [16, 32, 64],
@@ -838,8 +838,8 @@ def main():
     
     # Print summary of best models
     if len(results) > 0:
-        print("\nTop 5 models by test loss:")
-        for i, row in results.sort_values('test_loss').head(5).iterrows():
+        print("\nTop 10 models by test loss:")
+        for i, row in results.sort_values('test_loss').head(10).iterrows():
             print(f"Run {int(row['run_id'])}, Test Loss: {row['test_loss']:.6f}, "
                   f"Seq Length: {int(row['seq_length'])}, "
                   f"Hidden Dim: {int(row['hidden_dim'])}, "
@@ -848,8 +848,8 @@ def main():
         
         # If backtesting was done and results are available, show those too
         if 'total_return' in results.columns:
-            print("\nTop 5 models by total return:")
-            for i, row in results.sort_values('total_return', ascending=False).head(5).iterrows():
+            print("\nTop 10 models by total return:")
+            for i, row in results.sort_values('total_return', ascending=False).head(10).iterrows():
                 print(f"Run {int(row['run_id'])}, Return: {row['total_return']:.2f}%, "
                       f"Sharpe: {row['sharpe_ratio']:.2f}, "
                       f"DrawDown: {row['max_drawdown']:.2f}%, "

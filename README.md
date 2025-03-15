@@ -116,6 +116,11 @@ python hyperparameter_search.py --very-aggressive --backtest-all
 
 # Specify number of top models to backtest
 python hyperparameter_search.py --aggressive --top-models 10
+
+# hyperparameter search with custom parameters
+python search_test.py --data ./data/raw/ETH_usdt_1h_2020JAN01_2025MAR14.csv --aggressive --n-iter 60 --output experiments/ETH_search --backtest-all 
+python search_test.py --data ./data/raw/BTC_usdt_1h_2020JAN01_2025MAR14.csv --aggressive --n-iter 60 --output experiments/BTC_search --backtest-all 
+python search_test.py --data ./data/raw/SOL_usdt_1h_2020AUG11_2025MAR14.csv --aggressive --n-iter 60 --output experiments/SOL_search --backtest-all 
 ```
 
 
@@ -126,6 +131,25 @@ Back testing Options:
 - `--commission`: Trading commission as a decimal (default: 0.001 = 0.1%)
 - `--capital`: Initial capital for the backtest (default: 10000)
 - `--no-baseline`: Disable baseline model comparison
+
+How to Run with Synthetic Data
+You can now test your transformer model on a synthetic sine wave by running:
+python backtest_testset_only.py --experiment experiments/your_model_directory --synthetic
+By default, this will use a sine wave with 20 periods, 100 points per period, and 0.1 noise level.
+Customization Options
+You can customize the synthetic data with these parameters:
+python backtest_testset_only.py --experiment experiments/your_model_directory \
+                                --synthetic \
+                                --wave-type sine \
+                                --periods 20 \
+                                --points-per-period 100 \
+                                --noise 0.1
+Available options:
+
+--wave-type: Choose from sine, cosine, or both (combined waves)
+--periods: Number of complete wave cycles
+--points-per-period: Data points per wave cycle
+--noise: Amount of random noise to add (0.0 for perfect waves)
 
 ## Future Improvements
 
