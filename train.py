@@ -15,7 +15,7 @@ from tqdm import tqdm
 # Import project modules
 from src.model import TransformerModel, BaselineModel
 from src.process_data import load_data, add_technical_indicators, create_sequences
-
+from directional_loss import DirectionalConfidenceLoss, AdaptiveDirectionalLoss
 def train_model(
     model,
     train_loader,
@@ -287,8 +287,7 @@ def main():
     
     # Initialize optimizer and loss function
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    criterion = nn.MSELoss()
-    
+    criterion = DirectionalConfidenceLoss(confidence_weight=0.3)
     # Train the model
     print("Training model...")
     train_losses, val_losses = train_model(

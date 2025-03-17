@@ -1,3 +1,0 @@
-Test Loss: 0.000033
-Best Validation Loss: 0.000018
-Epochs Completed: 63
