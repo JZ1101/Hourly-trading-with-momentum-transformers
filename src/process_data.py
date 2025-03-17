@@ -144,6 +144,44 @@ def process_and_save(
     print(f"Features: {df_features.columns.tolist()}")
     
     return df_features
+def split_dataset(X, y, test_size=None, val_size=None, shuffle=None, random_state=None):
+    """
+    Split dataset into train, validation, and test sets in a consistent way.
+    Uses config default values if not specified.
+    
+    Args:
+        X: Features array with shape [samples, sequence_length, features]
+        y: Target array with shape [samples]
+        test_size: Fraction of data to use for testing (default from config)
+        val_size: Fraction of remaining data to use for validation (default from config)
+        shuffle: Whether to shuffle data before splitting (default from config)
+        random_state: Random seed for reproducibility
+        
+    Returns:
+        X_train, X_val, X_test, y_train, y_val, y_test
+    """
+    from sklearn.model_selection import train_test_split
+    from src.config import DEFAULT_TEST_SIZE, DEFAULT_VAL_SIZE, SHUFFLE_SPLIT
+    
+    # Use config values if not specified
+    test_size = test_size if test_size is not None else DEFAULT_TEST_SIZE
+    val_size = val_size if val_size is not None else DEFAULT_VAL_SIZE
+    shuffle = shuffle if shuffle is not None else SHUFFLE_SPLIT
+    
+    # First split: separate test set
+    X_train_val, X_test, y_train_val, y_test = train_test_split(
+        X, y, test_size=test_size, shuffle=shuffle, random_state=random_state
+    )
+    
+    # Second split: separate validation set from training set
+    X_train, X_val, y_train, y_val = train_test_split(
+        X_train_val, y_train_val, test_size=val_size, shuffle=shuffle, random_state=random_state
+    )
+    
+    print(f"Data splits - Train: {X_train.shape}, Val: {X_val.shape}, Test: {X_test.shape}")
+    print(f"Using test_size={test_size}, val_size={val_size}, shuffle={shuffle}")
+    
+    return X_train, X_val, X_test, y_train, y_val, y_test
 
 if __name__ == "__main__":
     raw_path = "../data/raw/btc_usdt_1h_2020Jan1_2025Mar6.csv"

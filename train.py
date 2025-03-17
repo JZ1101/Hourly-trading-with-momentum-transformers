@@ -15,7 +15,9 @@ from tqdm import tqdm
 # Import project modules
 from src.model import TransformerModel, BaselineModel
 from src.process_data import load_data, add_technical_indicators, create_sequences
-from directional_loss import DirectionalConfidenceLoss, AdaptiveDirectionalLoss
+from src.process_data import split_dataset
+from src.config import DEFAULT_TEST_SIZE, DEFAULT_VAL_SIZE
+from src.directional_loss import DirectionalConfidenceLoss, AdaptiveDirectionalLoss
 def train_model(
     model,
     train_loader,
@@ -225,13 +227,25 @@ def main():
     print(f"Sequence data shape: X={X.shape}, y={y.shape}")
     
     # Split data
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, shuffle=False
-    )
-    
-    X_train, X_val, y_train, y_val = train_test_split(
-        X_train, y_train, test_size=0.2, shuffle=False
-    )
+    # Split data using the standardized function
+    X_train, X_val, X_test, y_train, y_val, y_test = split_dataset(X, y)
+
+    # Save the data split parameters along with other parameters
+    params = {
+        'seq_length': seq_length,
+        'hidden_dim': hidden_dim,
+        'num_heads': num_heads,
+        'num_layers': num_layers,
+        'dropout': dropout,
+        'learning_rate': learning_rate,
+        'batch_size': batch_size,
+        'patience': patience,
+        'test_size': DEFAULT_TEST_SIZE,  # Save the split parameters too
+        'val_size': DEFAULT_VAL_SIZE
+    }
+
+    with open(os.path.join(experiment_dir, 'params.txt'), 'w') as f:
+        json.dump(params, f, indent=4)
     
     # Standardize features (using only training data statistics)
     # First reshape to 2D

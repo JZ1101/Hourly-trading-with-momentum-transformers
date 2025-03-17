@@ -13,19 +13,20 @@ from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from datetime import datetime
-
+from src.process_data import split_dataset
 # Import your existing functions and modules
 # Assuming train.py and backtest_testset_only.py are in the same directory
 from src.model import TransformerModel, BaselineModel
 from src.process_data import load_data, add_technical_indicators, create_sequences
 from train import train_model  # Your existing train_model function
 from backtest_testset_only import run_backtest_on_test_set
-
+# Import the defaults from config
+from src.config import DEFAULT_TEST_SIZE, DEFAULT_VAL_SIZE
 def grid_search_with_backtest(
     data_path,
     param_grid,
-    test_size=0.2,
-    val_size=0.2,
+    test_size=DEFAULT_TEST_SIZE,
+    val_size=DEFAULT_VAL_SIZE,
     base_experiment_dir='experiments/search_test',
     max_epochs=100,
     backtest_params={
@@ -175,14 +176,12 @@ def grid_search_with_backtest(
             X, y = create_sequences(df_features, seq_length, 'returns', feature_cols)
             
             print(f"Sequence data shape: X={X.shape}, y={y.shape}")
-            
-            # Split data (time-series split)
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=test_size, shuffle=False
-            )
-            
-            X_train, X_val, y_train, y_val = train_test_split(
-                X_train, y_train, test_size=val_size, shuffle=False
+            # Add data split parameters to the run parameters
+            params['test_size'] = test_size
+            params['val_size'] = val_size
+            # Split data using the standardized function
+            X_train, X_val, X_test, y_train, y_val, y_test = split_dataset(
+                X, y, test_size=test_size, val_size=val_size
             )
             
             print(f"Data splits - Train: {X_train.shape}, Val: {X_val.shape}, Test: {X_test.shape}")
@@ -709,6 +708,10 @@ def main():
                         help='Backtest all models instead of just top performers')
     parser.add_argument('--immediate-backtest', action='store_true',
                         help='Run backtest immediately after training each model')
+    parser.add_argument('--test-size', type=float, default=DEFAULT_TEST_SIZE,
+                    help=f'Fraction of data to use for testing (default: {DEFAULT_TEST_SIZE})')
+    parser.add_argument('--val-size', type=float, default=DEFAULT_VAL_SIZE,
+                    help=f'Fraction of remaining data to use for validation (default: {DEFAULT_VAL_SIZE})')
     
     args = parser.parse_args()
     

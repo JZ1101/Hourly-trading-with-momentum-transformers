@@ -118,9 +118,9 @@ python hyperparameter_search.py --very-aggressive --backtest-all
 python hyperparameter_search.py --aggressive --top-models 10
 
 # hyperparameter search with custom parameters
-python search_test.py --data ./data/raw/ETH_usdt_1h_2020JAN01_2025MAR14.csv --aggressive --n-iter 60 --output experiments/ETH_search --backtest-all 
-python search_test.py --data ./data/raw/BTC_usdt_1h_2020JAN01_2025MAR14.csv --aggressive --n-iter 60 --output experiments/BTC_search --backtest-all 
-python search_test.py --data ./data/raw/SOL_usdt_1h_2020AUG11_2025MAR14.csv --aggressive --n-iter 60 --output experiments/SOL_search --backtest-all 
+python search_test.py --data ./data/raw/ETH_usdt_1h_2020JAN01_2025MAR14.csv --aggressive --n-iter 60 --output experiments/ETH_search_new_loss --backtest-all 
+python search_test.py --data ./data/raw/BTC_usdt_1h_2020JAN01_2025MAR14.csv --aggressive --n-iter 60 --output experiments/BTC_search_new_loss --backtest-all 
+python search_test.py --data ./data/raw/SOL_usdt_1h_2020AUG11_2025MAR14.csv --aggressive --n-iter 60 --output experiments/SOL_search_new_loss --backtest-all 
 ```
 
 

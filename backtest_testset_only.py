@@ -12,7 +12,8 @@ from datetime import datetime, timedelta
 from src.model import TransformerModel, BaselineModel
 from src.process_data import load_data, add_technical_indicators, create_sequences
 from src.backtest import Backtester
-
+# Import the standardized splitting function
+from src.process_data import split_dataset
 def generate_synthetic_data(wave_type='sine', n_periods=20, points_per_period=100, noise_level=0.1, start_date='2023-01-01'):
     """
     Generate synthetic price data based on sine or cosine waves
@@ -180,12 +181,13 @@ def run_backtest_on_test_set(data_path=None, experiment_dir=None, commission=0.0
     
     print(f"Total data shape: X={X.shape}")
     
-    # Split the data - using the same split as in training
-    # This ensures we're using exactly the same test set
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, shuffle=False
-    )
-    
+    # Extract test_size and val_size from params if available, otherwise use defaults
+    test_size = params.get('test_size')  # Will be None if not found
+    val_size = params.get('val_size')    # Will be None if not found
+
+    # Split data using the standardized function - will use defaults if test_size/val_size are None
+    X_train, X_val, X_test, y_train, y_val, y_test = split_dataset(X, y, test_size=test_size, val_size=val_size)
+        
     print(f"Test data shape: X_test={X_test.shape}")
     
     # Calculate the starting index for the test set in the original data
